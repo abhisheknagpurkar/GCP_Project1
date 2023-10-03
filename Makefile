@@ -10,10 +10,10 @@ install:
 
 format:
 		#format code
-		black ./ETLProject-1/*.py
+		black ./ETLProject-1/IngestionAndLoad/*.py
 lint:
 	#flake8 or pylint
-	pylint --disable=R,C ./ETLProject-1/*.py
+	pylint --disable=R,C ./ETLProject-1/IngestionAndLoad/*.py
 test:
 	#pytest
 deploy:
