@@ -9,7 +9,7 @@ datasets_name = [
     "dm_regional_manager",
     "dm_bikesharing",
 ]
-location = "us-east4"
+location = "US"
 
 
 def create_bigquery_dataset(dataset_name):
