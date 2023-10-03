@@ -1,0 +1,12 @@
+google-cloud-storage
+google-cloud-bigquery
+google-cloud-pubsub
+google-cloud-dataproc
+google-cloud-vision
+google-cloud-language
+google-api-python-client
+google-auth
+pytest
+pylint
+pytest-cov
+black
