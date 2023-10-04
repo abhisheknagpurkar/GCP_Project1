@@ -2,5 +2,25 @@ gcloud composer environments storage dags import --environment airflowinstance1 
 
 gcloud composer environments storage dags import --environment airflowinstance1 --location us-east4 --source ./SF_bike-sharing/ETL/Orchestration/level_3_dag.py
 
+gcloud composer environments storage dags import --environment airflowinstance1 --location us-east4 --source ./SF_bike-sharing/ETL/Orchestration/level_4_dag.py
+
 bq --location=us mk --dataset dataengineeringongcp-400910:
 temporary_staging
+
+gcloud composer environments run \ ${your_composer_environment_name} \
+--location [your composer environment region] \
+backfill -- -s [your backfill start date] \
+-e [your backfill end date] [your dag id]
+
+Note: If you run the preceding command, Airflow will trigger DAG Runs for the given date. 
+The execution_date variable will return the backfill date.
+
+
+gcloud composer environments run airflowinstance1 --location=us-east4 clear -- level_4_dag_task_idempotency -c
+-t [your tasks id or regex] -s \
+[your start date] -d [your end date]
+
+Note: Preceding command, will trigger a rerun of the specific DAG and tasks.
+
+Trips table Schema:
+trip_id:STRING, duration_sec:INTEGER, start_date:TIMESTAMP, start_station_name:STRING, start_station_id:STRING, end_date:TIMESTAMP, end_station_name:STRING, end_station_id:STRING, member_gender:STRING

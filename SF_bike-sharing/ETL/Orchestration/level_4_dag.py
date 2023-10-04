@@ -1,5 +1,5 @@
-import os
 import json
+import os
 
 from airflow import DAG
 from airflow.contrib.operators.gcp_sql_operator import CloudSqlInstanceExportOperator
@@ -29,6 +29,7 @@ bq_dwh_dataset = settings["bq_dwh_dataset"]
 
 # Macros
 execution_date = "{{ ds }}"
+execution_date_nodash = "{{ ds_nodash }}"
 
 # Stations
 station_source_object = "chapter-4/stations/stations.csv"
@@ -47,10 +48,9 @@ bq_stations_table_id = f"{gcp_project_id}.{bq_raw_dataset}.{bq_station_table_nam
 # bq_stations_table_schema = read_json_schema('/home/airflow/gcs/data/schema/stations_schema.json')
 bq_stations_table_schema = "data/schema/stations_schema.json"
 
-
 # Regions
 gcs_regions_source_object = "from-git/chapter-3/dataset/regions/regions.csv"
-gcs_regions_target_object = "chapter-4/regions/regions.csv"
+gcs_regions_target_object = f"chapter-4/regions/{execution_date_nodash}/regions.csv"
 bq_regions_table_name = "regions"
 bq_regions_table_id = f"{gcp_project_id}.{bq_raw_dataset}.{bq_regions_table_name}"
 bq_regions_table_schema = "data/schema/regions_schema.json"
@@ -58,9 +58,9 @@ bq_regions_table_schema = "data/schema/regions_schema.json"
 # Trips
 bq_temporary_extract_dataset_name = "temporary_staging"
 bq_temporary_extract_table_name = "trips"
-bq_temporary_table_id = f"{gcp_project_id}.{bq_temporary_extract_dataset_name}.{bq_temporary_extract_table_name}"
+bq_temporary_table_id = f"{gcp_project_id}.{bq_temporary_extract_dataset_name}.{bq_temporary_extract_table_name}_{execution_date_nodash}"
 
-gcs_trips_source_object = "chapter-4/trips/trips.csv"
+gcs_trips_source_object = f"chapter-4/trips/{execution_date_nodash}/*.csv"
 gcs_trips_source_uri = f"gs://{gcs_source_data_bucket}/{gcs_trips_source_object}"
 
 bq_trips_table_name = "trips"
@@ -70,7 +70,7 @@ bq_trips_table_schema = "data/schema/trips_schema.json"
 # DWH
 bq_fact_trips_daily_table_name = "facts_trips_daily"
 bq_fact_trips_daily_table_id = (
-    f"{gcp_project_id}.{bq_dwh_dataset}.{bq_fact_trips_daily_table_name}"
+    f"{gcp_project_id}.{bq_dwh_dataset}.{bq_fact_trips_daily_table_name}${execution_date_nodash}"
 )
 
 bq_dim_stations_table_name = "dim_stations"
@@ -78,13 +78,12 @@ bq_dim_stations_table_id = (
     f"{gcp_project_id}.{bq_dwh_dataset}.{bq_dim_stations_table_name}"
 )
 
-
 with DAG(
-    dag_id="level_3_dag_parameters",
+    dag_id="level_4_dag_task_idempotency",
     default_args=args,
     schedule_interval="0 5 * * *",
-    start_date=datetime(2023, 10, 1),
-    end_date=datetime(2023, 10, 5),
+    start_date=datetime(2018, 1, 1),
+    end_date=datetime(2018, 1, 5),
 ) as dag:
     ### Load Station Table ###
     export_mysql_station = CloudSqlInstanceExportOperator(
@@ -129,7 +128,7 @@ with DAG(
         sql=f"""
             Select trip_id, duration_sec, start_date, start_station_name, start_station_id, end_date, end_station_name, end_station_id, member_gender 
             from `bigquery-public-data.san_francisco_bikeshare.bikeshare_trips`
-            where date(start_date) = DATE('{execution_date})
+            where date(start_date) = DATE('{execution_date}')
         """,
         use_legacy_sql=False,
         destination_dataset_table=bq_temporary_table_id,
@@ -150,25 +149,28 @@ with DAG(
         task_id="gcs_to_bq_trips",
         bucket=gcs_source_data_bucket,
         source_objects=[gcs_trips_source_object],
-        destination_project_dataset_table=bq_trips_table_id,
+        destination_project_dataset_table=bq_trips_table_id
+        + f"${execution_date_nodash}",
         schema_object=bq_trips_table_schema,
         schema_object_bucket="us-east4-airflowinstance1-971d22b7-bucket",
-        write_disposition="WRITE_APPEND",
+        time_partitioning={"time_partitioning_type": "DAY", "field": "start_date"},
+        write_disposition="WRITE_TRUNCATE",
     )
 
     ### Load DWH Tables ###
     dwh_fact_trips_daily = BigQueryOperator(
-        task_id="dwh_fact_trips_daily",
+        task_id="dwh_facts_trips_daily",
         sql=f"""SELECT DATE(start_date) as trip_date,
                                       start_station_id,
                                       COUNT(trip_id) as total_trips,
                                       SUM(duration_sec) as sum_duration_sec,
                                       AVG(duration_sec) as avg_duration_sec
                                       FROM `{bq_trips_table_id}`
-                                      WHERE DATE(start_date) = '2018-01-05'
+                                      WHERE DATE(start_date) = DATE('{execution_date}')
                                       GROUP BY trip_date, start_station_id""",
         destination_dataset_table=bq_fact_trips_daily_table_id,
-        write_disposition="WRITE_APPEND",
+        write_disposition="WRITE_TRUNCATE",
+        time_partitioning={"time_partitioning_type": "DAY", "field": "trip_date"},
         create_disposition="CREATE_IF_NEEDED",
         use_legacy_sql=False,
         priority="BATCH",
@@ -195,7 +197,8 @@ with DAG(
     bq_row_count_check_dwh_fact_trips_daily = BigQueryCheckOperator(
         task_id="bq_row_count_check_dwh_fact_trips_daily",
         sql=f"""
-    select count(*) from `{bq_fact_trips_daily_table_id}`
+    select count(*) from `{gcp_project_id}.{bq_dwh_dataset}.{bq_fact_trips_daily_table_name}`
+    WHERE trip_date = DATE('{execution_date}')
     """,
         use_legacy_sql=False,
     )
@@ -209,22 +212,12 @@ with DAG(
     )
 
     ### Load Data Mart ###
-
     export_mysql_station >> gcs_to_bq_station
     gcs_to_gcs_region >> gcs_to_bq_region
     bq_to_bq_temporary_trips >> bq_to_gcs_extract_trips >> gcs_to_bq_trips
 
-    (
-        [gcs_to_bq_station, gcs_to_bq_region, gcs_to_bq_trips]
-        >> dwh_fact_trips_daily
-        >> bq_row_count_check_dwh_fact_trips_daily
-    )
-    (
-        [gcs_to_bq_station, gcs_to_bq_region, gcs_to_bq_trips]
-        >> dwh_dim_stations
-        >> bq_row_count_check_dwh_dim_stations
-    )
-
-
+    [gcs_to_bq_station,gcs_to_bq_region,gcs_to_bq_trips] >> dwh_fact_trips_daily >> bq_row_count_check_dwh_fact_trips_daily
+    [gcs_to_bq_station,gcs_to_bq_region,gcs_to_bq_trips] >> dwh_dim_stations >> bq_row_count_check_dwh_dim_stations
+    
 if __name__ == "__main__":
     dag.cli()

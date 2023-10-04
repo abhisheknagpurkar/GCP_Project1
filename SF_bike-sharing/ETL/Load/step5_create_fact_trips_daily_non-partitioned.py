@@ -15,6 +15,9 @@ def create_fact_table(project_id, target_table_id):
     )
 
     sql = f"""
+    CREATE TABLE {target_table_id}
+    partition by trip_date
+    AS (
     select DATE(start_date) as trip_date,
     start_station_id,
     COUNT(trip_id) as total_trips,
@@ -24,7 +27,8 @@ def create_fact_table(project_id, target_table_id):
     JOIN `{project_id}.raw_bikesharing.stations` stations
     ON trips.start_station_id = stations.station_id
     WHERE DATE(start_date) =  DATE('{load_date}')
-    GROUP BY trip_date, start_station_id    
+    GROUP BY trip_date, start_station_id
+    )
     """
     query_job = client.query(sql, job_config=job_config)
 
