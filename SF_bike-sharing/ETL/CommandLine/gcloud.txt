@@ -1,0 +1,6 @@
+gcloud composer environments storage dags import --environment airflowinstance1 --location us-east4 source ./SF_bike-sharing/ETL/Orchestration/level_2_dag.py
+
+gcloud composer environments storage dags import --environment airflowinstance1 --location us-east4 --source ./SF_bike-sharing/ETL/Orchestration/level_3_dag.py
+
+bq --location=us mk --dataset dataengineeringongcp-400910:
+temporary_staging

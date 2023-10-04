@@ -11,3 +11,4 @@ pylint==3.0.0
 pytest-cov==4.1.0
 black==23.9.1
 pyspark==3.5.0
+apache-airflow==2.7.1

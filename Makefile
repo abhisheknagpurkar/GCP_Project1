@@ -2,6 +2,10 @@ install:
 		#install commands
 		pip install --upgrade pip &&\
 		pip install -r requirements.txt
+		
+install-mysqlclient:
+				sudo apt-get update
+				sudo apt-get install mysql-client
 
 # install_gcloud:
 # 	curl -O https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-448.0.0-linux-x86_64.tar.gz
@@ -10,10 +14,10 @@ install:
 
 format:
 		#format code
-		black ./ETLProject-1/IngestionAndLoad/*.py
+		black /workspaces/GCP_Project1/SF_bike-sharing/ETL/Orchestration/*.py /workspaces/GCP_Project1/SF_bike-sharing/ETL/Ingestion/*.py /workspaces/GCP_Project1/SF_bike-sharing/ETL/Load/*.py
 lint:
 	#flake8 or pylint
-	pylint --disable=R,C ./ETLProject-1/IngestionAndLoad/*.py
+	pylint --disable=R,C /workspaces/GCP_Project1/SF_bike-sharing/ETL/Orchestration/*.py /workspaces/GCP_Project1/SF_bike-sharing/ETL/Ingestion/*.py /workspaces/GCP_Project1/SF_bike-sharing/ETL/Load/*.py
 test:
 	#pytest
 deploy:
