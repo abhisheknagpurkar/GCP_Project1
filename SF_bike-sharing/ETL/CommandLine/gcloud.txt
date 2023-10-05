@@ -4,6 +4,10 @@ gcloud composer environments storage dags import --environment airflowinstance1 
 
 gcloud composer environments storage dags import --environment airflowinstance1 --location us-east4 --source ./SF_bike-sharing/ETL/Orchestration/level_4_dag.py
 
+gcloud composer environments storage dags import --environment airflowinstance1 --location us-east4 --source ./SF_bike-sharing/ETL/Orchestration/level_5_dag_sensor.py
+gcloud composer environments storage dags import --environment airflowinstance1 --location us-east4 --source ./SF_bike-sharing/ETL/Orchestration/level_5_downstream_dag.py
+
+
 bq --location=us mk --dataset dataengineeringongcp-400910:
 temporary_staging
 
@@ -24,3 +28,7 @@ Note: Preceding command, will trigger a rerun of the specific DAG and tasks.
 
 Trips table Schema:
 trip_id:STRING, duration_sec:INTEGER, start_date:TIMESTAMP, start_station_name:STRING, start_station_id:STRING, end_date:TIMESTAMP, end_station_name:STRING, end_station_id:STRING, member_gender:STRING
+
+Empty file for signal
+gsutil cp SF_bike-sharing/ETL/Orchestration/_SUCCESS  gs://deongcp-data-bucket/chapter-4/data/signal/_SUCCESS
+
