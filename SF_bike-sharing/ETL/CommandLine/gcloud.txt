@@ -7,6 +7,7 @@ gcloud composer environments storage dags import --environment airflowinstance1 
 gcloud composer environments storage dags import --environment airflowinstance1 --location us-east4 --source ./SF_bike-sharing/ETL/Orchestration/level_5_dag_sensor.py
 gcloud composer environments storage dags import --environment airflowinstance1 --location us-east4 --source ./SF_bike-sharing/ETL/Orchestration/level_5_downstream_dag.py
 
+gcloud composer environments storage dags import --environment airflowinstance1 --location us-east4 --source
 
 bq --location=us mk --dataset dataengineeringongcp-400910:
 temporary_staging
@@ -32,3 +33,54 @@ trip_id:STRING, duration_sec:INTEGER, start_date:TIMESTAMP, start_station_name:S
 Empty file for signal
 gsutil cp SF_bike-sharing/ETL/Orchestration/_SUCCESS  gs://deongcp-data-bucket/chapter-4/data/signal/_SUCCESS
 
+Cleanup:
+gcloud sql instances delete mysql-instance-source
+gcloud composer environments delete airflowinstance1 --location=us-east4
+
+
+----DataProc----
+gcloud dataproc clusters create deongcp-dataproc-cluster --enable-component-gateway \
+--region us-east4 --zone us-east4-a --master-machine-type n1-standard-2 --master-boot-disk-size 30 --num-workers 2 \
+--worker-machine-type n1-standard-2 --worker-boot-disk-size 30 --image-version 2.0-debian10 --optional-components JUPYTER
+
+SSH into DataProc Master
+PORT=1080
+HOSTNAME=deongcp-dataproc-cluster-m
+PROJECT=dataengineeringongcp-400910
+ZONE=us-east4-a
+gcloud compute ssh ${HOSTNAME} --project=${PROJECT} --zone=${ZONE}
+
+List of folders in HDFS
+hdfs dfs -ls ../
+
+Load data from GCS to HDFS
+gsutil cp gs://deongcp-data-bucket/from-git/chapter-5/dataset/simple_file.csv ./
+hdfs dfs -mkdir ../../data
+hdfs dfs -mkdir ../../data/simple_file
+hdfs dfs -put simple_file.csv ../../data/simple_file/
+
+CREATE EXTERNAL TABLE simple_table (
+    col_1 STRING,
+    col_2 STRING,
+    col_3 STRING)
+ROW FORMAT DELIMITED FIELDS TERMINATED BY ','
+STORED AS TEXTFILE
+location '/data/simple_file'
+TBLPROPERTIES ("skip.header.line.count"="1");
+
+
+
+Logs File
+gsutil cp gs://deongcp-data-bucket/from-git/chapter-5/dataset/logs_example.txt ./
+hdfs dfs -put logs_example.txt ../../data
+
+Copy pyspark_job to GCS
+gsutil cp /workspaces/GCP_Project1/DataLakeWithDataproc/Spark-ETL/pyspark_job_gcs.py gs://deongcp-data-bucket/chapter-5/code/
+
+gsutil cp /workspaces/GCP_Project1/DataLakeWithDataproc/Spark-ETL/pyspark_job_toBQ.py gs://deongcp-data-bucket/chapter-5/code/
+
+
+Run pyspark job on dataproc
+gcloud dataproc jobs submit pyspark --cluster deongcp-dataproc-cluster --region=us-east4 gs://deongcp-data-bucket/chapter-5/code/pyspark_job.py
+
+gcloud dataproc jobs submit pyspark --cluster deongcp-dataproc-cluster --region=us-east4 gs://deongcp-data-bucket/chapter-5/code/pyspark_job_toBQ.py --jars gs://spark-lib/bigquery/spark-bigquery-latest_2.12.jar
